@@ -104,7 +104,7 @@ describe("prettyPrintToString", () => {
     const result = prettyPrintToString(parent, 80, false);
 
     expect(result).toBe(
-      '{name: "parent", children: [{name: "child", parent: [Circular]}]}'
+      '{name: "parent", children: [{name: "child", parent: [Circular]}]}',
     );
   });
 
@@ -146,7 +146,7 @@ describe("prettyPrintToString", () => {
       "div",
       {},
       React.createElement("span", {}, "hello"),
-      React.createElement("span", {}, "world")
+      React.createElement("span", {}, "world"),
     );
     const result = prettyPrintToString(element, 80, false);
 
@@ -169,7 +169,7 @@ describe("prettyPrintToString", () => {
     const element = React.createElement(
       "g",
       { "data-path": "/" },
-      React.createElement("circle", { cx: 0, cy: 0 })
+      React.createElement("circle", { cx: 0, cy: 0 }),
     );
     const result = prettyPrintToString(element, 20, false);
 
@@ -180,7 +180,7 @@ describe("prettyPrintToString", () => {
     cx={0}
     cy={0}
   />
-</g>`
+</g>`,
     );
   });
 });

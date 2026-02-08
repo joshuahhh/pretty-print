@@ -1,76 +1,68 @@
 /**
- * A more general string tagging system that supports arbitrary Unicode characters.
+ * A string tagging system that supports arbitrary Unicode characters.
  *
- * Instead of encoding color information directly into characters, this system:
- * 1. Assigns unique PUA (Private Use Area) codepoints to mark span starts
- * 2. Uses a single universal PUA codepoint to mark span ends
- * 3. Records the original characters and associated before/after strings separately
+ * This system:
+ * 1. Replaces the first/last characters of tagged spans with fixed PUA markers
+ * 2. Records the original characters and associated before/after strings separately
+ * 3. Uses a caller-provided path (number[]) to determine the left-to-right order of spans
  * 4. Can expand the tagged string back to the original with tags applied
+ *
+ * The path-based approach means callers can tag() in any order — expand() sorts
+ * spans by path to match them with markers left-to-right in the string.
  */
 
-// Use Unicode private use area for markers
-const PUA_START = 0xe000;
-const PUA_END = 0xf8ff; // End of BMP private use area
-const END_MARKER = PUA_END; // Universal end marker
-const MAX_MARKERS = PUA_END - PUA_START; // One less because we reserve END_MARKER
+// Two fixed PUA codepoints — that's all we need
+const START_MARKER = 0xe000;
+const END_MARKER = 0xe001;
+
+export type TagPath = number[];
 
 interface SpanInfo {
-  startMarker: number; // PUA codepoint for start
+  path: TagPath;
   originalStart: string; // Original character at start position
   originalEnd: string | null; // Original character at end position, or null for single-char spans
   before: string; // String to insert before the span
   after: string; // String to insert after the span
 }
 
+function comparePaths(a: TagPath, b: TagPath): number {
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    if (a[i] !== b[i]) return a[i] - b[i];
+  }
+  return a.length - b.length;
+}
+
 export class StringTagger {
-  private spans: Map<number, SpanInfo> = new Map();
-  private nextMarkerIndex = 0;
+  private spans: SpanInfo[] = [];
 
   /**
-   * Tags a substring by replacing the first and last characters
-   * with unique PUA markers.
+   * Tags a substring by replacing the first and last characters with PUA markers.
    *
    * @param text The text to tag (can be any Unicode)
    * @param before String to insert before the span when expanded
    * @param after String to insert after the span when expanded
+   * @param path A number[] that determines this span's left-to-right position.
+   *   Paths are compared element-wise — spans with earlier paths are matched
+   *   to earlier (leftward) markers in the string.
    * @returns A string with same length, but first and last chars are PUA markers
    */
-  tag(text: string, before: string, after: string): string {
+  tag(text: string, before: string, after: string, path: TagPath): string {
     if (text.length === 0) {
       return text;
     }
 
-    if (this.nextMarkerIndex >= MAX_MARKERS) {
-      throw new Error(
-        `Exceeded maximum number of tagged spans (${MAX_MARKERS})`
-      );
-    }
-
-    // Get the next PUA codepoint for the start marker
-    const startMarker = PUA_START + this.nextMarkerIndex;
-    this.nextMarkerIndex++;
-
-    // Record the original characters and before/after strings
     const originalStart = text[0];
     const originalEnd = text.length === 1 ? null : text[text.length - 1];
 
-    this.spans.set(startMarker, {
-      startMarker,
-      originalStart,
-      originalEnd,
-      before,
-      after,
-    });
+    this.spans.push({ path, originalStart, originalEnd, before, after });
 
-    // Build the result: marker + middle + marker
     if (originalEnd === null) {
-      // Single character - just the start marker
-      return String.fromCharCode(startMarker);
+      return String.fromCharCode(START_MARKER);
     }
 
     const middle = text.slice(1, -1);
     return (
-      String.fromCharCode(startMarker) +
+      String.fromCharCode(START_MARKER) +
       middle +
       String.fromCharCode(END_MARKER)
     );
@@ -78,6 +70,9 @@ export class StringTagger {
 
   /**
    * Expands a tagged string back to the original text with before/after strings applied.
+   *
+   * Spans are matched to markers by sorting paths element-wise — the span with
+   * the earliest path is matched to the leftmost START_MARKER in the string.
    *
    * @param encoded The string containing PUA markers
    * @returns The fully expanded string with before/after strings wrapped around tagged spans
@@ -87,61 +82,57 @@ export class StringTagger {
       return encoded;
     }
 
-    // Regex to find any PUA character (start markers or end marker)
-    const puaRegex = /[\ue000-\uf8ff]/g;
+    // Sort spans by path — this determines left-to-right marker assignment
+    const sortedSpans = [...this.spans].sort((a, b) =>
+      comparePaths(a.path, b.path),
+    );
 
+    let spanIndex = 0;
     const parts: string[] = [];
     let lastIndex = 0;
-    let match: RegExpExecArray | null;
 
-    while ((match = puaRegex.exec(encoded)) !== null) {
-      const i = match.index;
+    for (let i = 0; i < encoded.length; i++) {
       const charCode = encoded.charCodeAt(i);
 
-      // Check if this is a start marker
-      const spanInfo = this.spans.get(charCode);
-
-      if (spanInfo) {
+      if (charCode === START_MARKER) {
         // Copy any regular text before this marker
         if (i > lastIndex) {
           parts.push(encoded.slice(lastIndex, i));
         }
 
-        // Found a tagged span
+        const spanInfo = sortedSpans[spanIndex++];
+        if (!spanInfo) {
+          throw new Error("More start markers in string than registered spans");
+        }
+
         if (spanInfo.originalEnd === null) {
-          // Single-character span - no end marker to look for
+          // Single-character span
           parts.push(spanInfo.before, spanInfo.originalStart, spanInfo.after);
           lastIndex = i + 1;
         } else {
-          // Multi-character span - find the end marker
+          // Multi-character span — find the end marker
           const endIndex = encoded.indexOf(
             String.fromCharCode(END_MARKER),
-            i + 1
+            i + 1,
           );
-
           if (endIndex === -1) {
             throw new Error("Tagged span missing end marker");
           }
 
-          // Extract the middle part (between start marker and end marker)
           const middle = encoded.slice(i + 1, endIndex);
-
-          // Build the expanded span
           parts.push(
             spanInfo.before,
             spanInfo.originalStart,
             middle,
             spanInfo.originalEnd,
-            spanInfo.after
+            spanInfo.after,
           );
 
           lastIndex = endIndex + 1;
-          // Advance the regex past the end marker
-          puaRegex.lastIndex = lastIndex;
+          i = endIndex; // skip past end marker
         }
-      } else {
-        // Unrecognized PUA character - this is an error
-        throw new Error(`Unrecognized PUA marker at index ${i}`);
+      } else if (charCode === END_MARKER) {
+        throw new Error(`Unexpected end marker at index ${i}`);
       }
     }
 

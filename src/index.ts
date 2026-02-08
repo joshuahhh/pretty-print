@@ -5,5 +5,3 @@ export {
   prettyPrintToString,
   testData,
 } from "./pretty-print.js";
-
-export { StringTagger } from "./string-tagger.js";

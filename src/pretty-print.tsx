@@ -1,6 +1,6 @@
 import * as prettier from "prettier";
 import React from "react";
-import { StringTagger } from "./string-tagger.js";
+import { StringTagger, TagPath } from "./string-tagger.js";
 
 const { group, indent, line, softline, ifBreak } = prettier.doc.builders;
 
@@ -23,12 +23,12 @@ type ColorType = (typeof COLORS)[number]["name"];
 const ANSI_RESET = "\x1b[0m";
 
 const COLOR_NAME_TO_ANSI = Object.fromEntries(
-  COLORS.map((c) => [c.name, c.ansi])
+  COLORS.map((c) => [c.name, c.ansi]),
 ) as Record<ColorType, string>;
 
 // Derived: ANSI code -> hex color lookup
 const ANSI_TO_HEX = Object.fromEntries(
-  COLORS.map((c) => [c.ansi.match(/\d+/)?.[0] || "", c.hex])
+  COLORS.map((c) => [c.ansi.match(/\d+/)?.[0] || "", c.hex]),
 ) as Record<string, string>;
 
 /**
@@ -36,7 +36,7 @@ const ANSI_TO_HEX = Object.fromEntries(
  */
 export function prettyPrintForBrowser(
   value: unknown,
-  printWidth: number = 80
+  printWidth: number = 80,
 ): [string, ...string[]] {
   const textWithAnsi = prettyPrintToString(value, printWidth, true);
   const ansiRegex = /\x1b\[(\d+)m/g;
@@ -72,7 +72,7 @@ export function prettyPrintForBrowser(
  */
 export function prettyLog(
   value: unknown,
-  { label, width = 120 }: { label?: string; width?: number } = {}
+  { label, width = 120 }: { label?: string; width?: number } = {},
 ): void {
   if (label) {
     console.group(label);
@@ -141,7 +141,7 @@ export function PrettyPrint({
       elements.push(
         <span key={key++} style={{ color: currentColor || "inherit" }}>
           {textBefore}
-        </span>
+        </span>,
       );
     }
     currentColor = ANSI_TO_HEX[match[1]] || "";
@@ -153,7 +153,7 @@ export function PrettyPrint({
     elements.push(
       <span key={key++} style={{ color: currentColor || "inherit" }}>
         {remaining}
-      </span>
+      </span>,
     );
   }
 
@@ -190,14 +190,19 @@ export function PrettyPrint({
 function prettyPrintToDoc(
   value: unknown,
   tagger: StringTagger | null,
-  visited: Set<unknown> = new Set()
+  visited: Set<unknown> = new Set(),
+  path: TagPath = [],
 ): Doc {
-  // Helper to colorize text if tagger is available
-  const colorize = (text: string, colorType: ColorType): string => {
+  const colorize = (
+    text: string,
+    colorType: ColorType,
+    path: TagPath,
+  ): string => {
     if (!tagger) return text;
     const ansi = COLOR_NAME_TO_ANSI[colorType];
-    return tagger.tag(text, ansi, ANSI_RESET);
+    return tagger.tag(text, ansi, ANSI_RESET, path);
   };
+
   // Handle JSX elements
   if (true) {
     // Change to false to disable JSX printing
@@ -212,20 +217,24 @@ function prettyPrintToDoc(
       };
       const { children, ...otherProps } = props;
 
-      const openTag = colorize(`<${type}`, "keyword");
-      const closeTag = colorize(`</${type}>`, "keyword");
-      const selfCloseTag = colorize("/>", "keyword");
+      const openTag = colorize(`<${type}`, "keyword", [...path, 0]);
+      const closeTag = colorize(`</${type}>`, "keyword", [...path, 4]);
+      const selfCloseTag = colorize("/>", "keyword", [...path, 2]);
 
       // Format props
       const propEntries = Object.entries(otherProps);
       const propDocs: Doc[] = [];
       for (let i = 0; i < propEntries.length; i++) {
         const [key, val] = propEntries[i];
-        const keyStr = colorize(key, "key");
+        const keyStr = colorize(key, "key", [...path, 1, i, 0]);
         const valDoc =
           typeof val === "string"
-            ? colorize(JSON.stringify(val), "string")
-            : ["{", prettyPrintToDoc(val, tagger, visited), "}"];
+            ? colorize(JSON.stringify(val), "string", [...path, 1, i, 1])
+            : [
+                "{",
+                prettyPrintToDoc(val, tagger, visited, [...path, 1, i, 1]),
+                "}",
+              ];
         propDocs.push(ifBreak(line, " "), keyStr, "=", valDoc);
       }
 
@@ -245,14 +254,13 @@ function prettyPrintToDoc(
         ]);
       }
 
-      const childDocs = childrenArray.map((child) =>
+      const childDocs = childrenArray.map((child, i) =>
         typeof child === "string" || typeof child === "number"
           ? String(child)
-          : prettyPrintToDoc(child, tagger, visited)
+          : prettyPrintToDoc(child, tagger, visited, [...path, 3, i]),
       );
 
       // Add conditional line breaks between children
-      // When inline, no separator. When broken, each child on its own line.
       const childDocsWithSeparators: Doc[] = [];
       for (let i = 0; i < childDocs.length; i++) {
         childDocsWithSeparators.push(childDocs[i]);
@@ -261,12 +269,10 @@ function prettyPrintToDoc(
         }
       }
 
-      // Group the opening tag separately so it can stay on one line if it fits,
-      // then group the whole element to allow compact inline formatting when possible
       const openingTag = group([
         openTag,
         indent(propDocs),
-        colorize(">", "keyword"),
+        colorize(">", "keyword", [...path, 2]),
       ]);
 
       return group([
@@ -279,19 +285,19 @@ function prettyPrintToDoc(
   }
 
   // Handle primitives
-  if (value === null) return colorize("null", "null");
-  if (value === undefined) return colorize("undefined", "null");
+  if (value === null) return colorize("null", "null", path);
+  if (value === undefined) return colorize("undefined", "null", path);
 
   if (typeof value === "string") {
-    return colorize(JSON.stringify(value), "string");
+    return colorize(JSON.stringify(value), "string", path);
   }
 
   if (typeof value === "number") {
-    return colorize(String(value), "number");
+    return colorize(String(value), "number", path);
   }
 
   if (typeof value === "boolean") {
-    return colorize(String(value), "boolean");
+    return colorize(String(value), "boolean", path);
   }
 
   if (typeof value === "function") {
@@ -303,13 +309,13 @@ function prettyPrintToDoc(
   }
 
   if (typeof value === "bigint") {
-    return colorize(`${value}n`, "number");
+    return colorize(`${value}n`, "number", path);
   }
 
   // Check for circular references (objects and arrays)
   if (typeof value === "object" && value !== null) {
     if (visited.has(value)) {
-      return colorize("[Circular]", "null");
+      return colorize("[Circular]", "null", path);
     }
   }
   // Mark this object/array as visited
@@ -322,8 +328,8 @@ function prettyPrintToDoc(
       return "[]";
     }
 
-    const elements = value.map((item) =>
-      prettyPrintToDoc(item, tagger, visited)
+    const elements = value.map((item, i) =>
+      prettyPrintToDoc(item, tagger, visited, [...path, i]),
     );
 
     // Use commas when inline, line breaks when multi-line
@@ -342,31 +348,31 @@ function prettyPrintToDoc(
   if (typeof value === "object") {
     // Handle special objects
     if (value instanceof Date) {
-      const keyword = colorize("new", "keyword");
-      const ctor = colorize("Date", "keyword");
+      const keyword = colorize("new", "keyword", [...path, 0]);
+      const ctor = colorize("Date", "keyword", [...path, 1]);
       const str = tagger
-        ? colorize(`"${value.toISOString()}"`, "string")
+        ? colorize(`"${value.toISOString()}"`, "string", [...path, 2])
         : `"${value.toISOString()}"`;
       return [keyword, " ", ctor, "(", str, ")"];
     }
 
     if (value instanceof RegExp) {
-      return colorize(value.toString(), "string");
+      return colorize(value.toString(), "string", path);
     }
 
     if (value instanceof Map) {
       if (value.size === 0) {
-        const keyword = colorize("new", "keyword");
-        const ctor = colorize("Map", "keyword");
+        const keyword = colorize("new", "keyword", [...path, 0]);
+        const ctor = colorize("Map", "keyword", [...path, 1]);
         return [keyword, " ", ctor, "()"];
       }
-      const keyword = colorize("new", "keyword");
-      const ctor = colorize("Map", "keyword");
-      const entries = Array.from(value.entries()).map(([k, v]) => [
+      const keyword = colorize("new", "keyword", [...path, 0]);
+      const ctor = colorize("Map", "keyword", [...path, 1]);
+      const entries = Array.from(value.entries()).map(([k, v], i) => [
         "[",
-        prettyPrintToDoc(k, tagger, visited),
+        prettyPrintToDoc(k, tagger, visited, [...path, 2, i, 0]),
         ", ",
-        prettyPrintToDoc(v, tagger, visited),
+        prettyPrintToDoc(v, tagger, visited, [...path, 2, i, 1]),
         "]",
       ]);
 
@@ -391,14 +397,14 @@ function prettyPrintToDoc(
 
     if (value instanceof Set) {
       if (value.size === 0) {
-        const keyword = colorize("new", "keyword");
-        const ctor = colorize("Set", "keyword");
+        const keyword = colorize("new", "keyword", [...path, 0]);
+        const ctor = colorize("Set", "keyword", [...path, 1]);
         return [keyword, " ", ctor, "()"];
       }
-      const keyword = colorize("new", "keyword");
-      const ctor = colorize("Set", "keyword");
-      const items = Array.from(value).map((v) =>
-        prettyPrintToDoc(v, tagger, visited)
+      const keyword = colorize("new", "keyword", [...path, 0]);
+      const ctor = colorize("Set", "keyword", [...path, 1]);
+      const items = Array.from(value).map((v, i) =>
+        prettyPrintToDoc(v, tagger, visited, [...path, 2, i]),
       );
 
       const withSeparators: Doc[] = [];
@@ -434,15 +440,19 @@ function prettyPrintToDoc(
     const idValue = idEntry?.[1];
 
     const remainingEntries = entries.filter(
-      ([key]) => key !== "type" && key !== "id"
+      ([key]) => key !== "type" && key !== "id",
     );
 
-    const props = remainingEntries.map(([key, val]) => {
+    const props = remainingEntries.map(([key, val], i) => {
       const keyStr = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key)
         ? key
         : JSON.stringify(key);
-      const coloredKey = colorize(keyStr, "key");
-      return [coloredKey, ": ", prettyPrintToDoc(val, tagger, visited)];
+      const coloredKey = colorize(keyStr, "key", [...path, 2, i, 0]);
+      return [
+        coloredKey,
+        ": ",
+        prettyPrintToDoc(val, tagger, visited, [...path, 2, i, 1]),
+      ];
     });
 
     // Use commas when inline, line breaks when multi-line
@@ -454,13 +464,12 @@ function prettyPrintToDoc(
       }
     }
 
-    // Build the prefix: "type#id" or "type" or "#id"
     const prefix: Doc[] = [];
     if (typeValue && typeof typeValue === "string") {
-      prefix.push(colorize(typeValue, "type"));
+      prefix.push(colorize(typeValue, "type", [...path, 0]));
     }
     if (idValue !== undefined) {
-      prefix.push(colorize("#" + String(idValue), "id"));
+      prefix.push(colorize("#" + String(idValue), "id", [...path, 1]));
     }
 
     return group([
@@ -485,7 +494,7 @@ function prettyPrintToDoc(
 export function prettyPrintToString(
   value: unknown,
   printWidth: number = 80,
-  useColor: boolean = true
+  useColor: boolean = true,
 ): string {
   const tagger = useColor ? new StringTagger() : null;
   const doc = prettyPrintToDoc(value, tagger);
