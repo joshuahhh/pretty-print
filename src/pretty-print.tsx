@@ -6,6 +6,13 @@ const { group, indent, line, softline, ifBreak } = prettier.doc.builders;
 
 type Doc = prettier.Doc;
 
+export interface PrettyPrintOptions {
+  width?: number;
+  useColor?: boolean;
+  niceId?: boolean;
+  niceType?: boolean;
+}
+
 // Single source of truth for all color information
 const COLORS = [
   { name: "string", ansi: "\x1b[32m", hex: "#22c55e" }, // green
@@ -36,9 +43,9 @@ const ANSI_TO_HEX = Object.fromEntries(
  */
 export function prettyPrintForBrowser(
   value: unknown,
-  printWidth: number = 80,
+  options: PrettyPrintOptions = {},
 ): [string, ...string[]] {
-  const textWithAnsi = prettyPrintToString(value, printWidth, true);
+  const textWithAnsi = prettyPrintToString(value, options);
   const ansiRegex = /\x1b\[(\d+)m/g;
   const parts: string[] = [];
   const styles: string[] = [];
@@ -72,12 +79,12 @@ export function prettyPrintForBrowser(
  */
 export function prettyLog(
   value: unknown,
-  { label, width = 120 }: { label?: string; width?: number } = {},
+  { label, ...options }: PrettyPrintOptions & { label?: string } = {},
 ): void {
   if (label) {
     console.group(label);
   }
-  console.log(...prettyPrintForBrowser(value, width));
+  console.log(...prettyPrintForBrowser(value, options));
   if (label) {
     console.groupEnd();
   }
@@ -91,14 +98,15 @@ export function PrettyPrint({
   value,
   style,
   className,
-}: {
+  ...options
+}: PrettyPrintOptions & {
   value: unknown;
   style?: React.CSSProperties;
   className?: string;
 }) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const measureRef = React.useRef<HTMLSpanElement>(null);
-  const [printWidth, setPrintWidth] = React.useState(80);
+  const [measuredWidth, setMeasuredWidth] = React.useState(80);
 
   React.useEffect(() => {
     if (!containerRef.current || !measureRef.current) return;
@@ -113,7 +121,7 @@ export function PrettyPrint({
 
       const containerWidth = containerRef.current.offsetWidth;
       const charsPerLine = Math.floor(containerWidth / charWidth);
-      setPrintWidth(charsPerLine); // minimum 40 chars
+      setMeasuredWidth(charsPerLine);
     };
 
     // Initial measurement (with slight delay to ensure fonts are loaded)
@@ -127,7 +135,10 @@ export function PrettyPrint({
   }, []);
 
   // Convert ANSI color codes to React elements with inline styles
-  const textWithAnsi = prettyPrintToString(value, printWidth, true);
+  const textWithAnsi = prettyPrintToString(value, {
+    ...options,
+    width: options.width ?? measuredWidth,
+  });
   const ansiRegex = /\x1b\[(\d+)m/g;
   const elements: React.ReactNode[] = [];
   let lastIndex = 0;
@@ -190,9 +201,11 @@ export function PrettyPrint({
 function prettyPrintToDoc(
   value: unknown,
   tagger: StringTagger | null,
+  options: PrettyPrintOptions,
   visited: Set<unknown> = new Set(),
   path: TagPath = [],
 ): Doc {
+  const { niceType = true, niceId = true } = options;
   const colorize = (
     text: string,
     colorType: ColorType,
@@ -232,7 +245,12 @@ function prettyPrintToDoc(
             ? colorize(JSON.stringify(val), "string", [...path, 1, i, 1])
             : [
                 "{",
-                prettyPrintToDoc(val, tagger, visited, [...path, 1, i, 1]),
+                prettyPrintToDoc(val, tagger, options, visited, [
+                  ...path,
+                  1,
+                  i,
+                  1,
+                ]),
                 "}",
               ];
         propDocs.push(ifBreak(line, " "), keyStr, "=", valDoc);
@@ -257,7 +275,7 @@ function prettyPrintToDoc(
       const childDocs = childrenArray.map((child, i) =>
         typeof child === "string" || typeof child === "number"
           ? String(child)
-          : prettyPrintToDoc(child, tagger, visited, [...path, 3, i]),
+          : prettyPrintToDoc(child, tagger, options, visited, [...path, 3, i]),
       );
 
       // Add conditional line breaks between children
@@ -329,7 +347,7 @@ function prettyPrintToDoc(
     }
 
     const elements = value.map((item, i) =>
-      prettyPrintToDoc(item, tagger, visited, [...path, i]),
+      prettyPrintToDoc(item, tagger, options, visited, [...path, i]),
     );
 
     // Use commas when inline, line breaks when multi-line
@@ -370,9 +388,9 @@ function prettyPrintToDoc(
       const ctor = colorize("Map", "keyword", [...path, 1]);
       const entries = Array.from(value.entries()).map(([k, v], i) => [
         "[",
-        prettyPrintToDoc(k, tagger, visited, [...path, 2, i, 0]),
+        prettyPrintToDoc(k, tagger, options, visited, [...path, 2, i, 0]),
         ", ",
-        prettyPrintToDoc(v, tagger, visited, [...path, 2, i, 1]),
+        prettyPrintToDoc(v, tagger, options, visited, [...path, 2, i, 1]),
         "]",
       ]);
 
@@ -404,7 +422,7 @@ function prettyPrintToDoc(
       const keyword = colorize("new", "keyword", [...path, 0]);
       const ctor = colorize("Set", "keyword", [...path, 1]);
       const items = Array.from(value).map((v, i) =>
-        prettyPrintToDoc(v, tagger, visited, [...path, 2, i]),
+        prettyPrintToDoc(v, tagger, options, visited, [...path, 2, i]),
       );
 
       const withSeparators: Doc[] = [];
@@ -434,13 +452,15 @@ function prettyPrintToDoc(
     }
 
     // Check if object has "type" and/or "id" fields
-    const typeEntry = entries.find(([key]) => key === "type");
+    const typeEntry = niceType
+      ? entries.find(([key]) => key === "type")
+      : undefined;
     const typeValue = typeEntry?.[1];
-    const idEntry = entries.find(([key]) => key === "id");
+    const idEntry = niceId ? entries.find(([key]) => key === "id") : undefined;
     const idValue = idEntry?.[1];
 
     const remainingEntries = entries.filter(
-      ([key]) => key !== "type" && key !== "id",
+      ([key]) => (key !== "type" || !niceType) && (key !== "id" || !niceId),
     );
 
     const props = remainingEntries.map(([key, val], i) => {
@@ -451,7 +471,7 @@ function prettyPrintToDoc(
       return [
         coloredKey,
         ": ",
-        prettyPrintToDoc(val, tagger, visited, [...path, 2, i, 1]),
+        prettyPrintToDoc(val, tagger, options, visited, [...path, 2, i, 1]),
       ];
     });
 
@@ -485,21 +505,15 @@ function prettyPrintToDoc(
   return "[Unknown]";
 }
 
-/**
- * Pretty-print a JavaScript value to a string.
- * @param value The value to pretty-print
- * @param printWidth Maximum line width (default: 80)
- * @param useColor Whether to include colors (default: true)
- */
 export function prettyPrintToString(
   value: unknown,
-  printWidth: number = 80,
-  useColor: boolean = true,
+  options: PrettyPrintOptions = {},
 ): string {
+  const { width = 80, useColor = true } = options;
   const tagger = useColor ? new StringTagger() : null;
-  const doc = prettyPrintToDoc(value, tagger);
+  const doc = prettyPrintToDoc(value, tagger, options);
   const formatted = prettier.doc.printer.printDocToString(doc, {
-    printWidth,
+    printWidth: width,
     tabWidth: 2,
     useTabs: false,
   }).formatted;

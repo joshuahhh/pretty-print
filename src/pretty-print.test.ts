@@ -6,8 +6,8 @@ describe("prettyPrintToString", () => {
   it("should format with and without ANSI codes", () => {
     const longArray = Array.from({ length: 20 }, (_, i) => i);
 
-    const withoutAnsi = prettyPrintToString(longArray, 200, false);
-    const withAnsi = prettyPrintToString(longArray, 200, true);
+    const withoutAnsi = prettyPrintToString(longArray, { width: 200, useColor: false });
+    const withAnsi = prettyPrintToString(longArray, { width: 200, useColor: true });
 
     // Count ANSI escape sequences
     const ansiMatches = withAnsi.match(/\x1b\[\d+m/g);
@@ -17,7 +17,7 @@ describe("prettyPrintToString", () => {
 
   it("should format long arrays inline with wide printWidth", () => {
     const longArray = Array.from({ length: 20 }, (_, i) => i);
-    const result = prettyPrintToString(longArray, 200, false);
+    const result = prettyPrintToString(longArray, { width: 200, useColor: false });
 
     // With width 200, this should be all on one line
     expect(result).not.toContain("\n");
@@ -25,7 +25,7 @@ describe("prettyPrintToString", () => {
 
   it("should format long arrays with line breaks when narrow", () => {
     const longArray = Array.from({ length: 20 }, (_, i) => i);
-    const result = prettyPrintToString(longArray, 40, false);
+    const result = prettyPrintToString(longArray, { width: 40, useColor: false });
 
     // With width 40, this should break across multiple lines
     expect(result).toContain("\n");
@@ -42,7 +42,7 @@ describe("prettyPrintToString", () => {
       g: 7,
       h: 8,
     };
-    const result = prettyPrintToString(obj, 200, false);
+    const result = prettyPrintToString(obj, { width: 200, useColor: false });
 
     // Should be relatively compact
     expect(result.split("\n").length).toBeLessThan(10);
@@ -57,8 +57,8 @@ describe("prettyPrintToString", () => {
       ],
     };
 
-    const wide = prettyPrintToString(nested, 200, false);
-    const narrow = prettyPrintToString(nested, 40, false);
+    const wide = prettyPrintToString(nested, { width: 200, useColor: false });
+    const narrow = prettyPrintToString(nested, { width: 40, useColor: false });
 
     // Wide version should have fewer line breaks
     expect(wide.split("\n").length).toBeLessThan(narrow.split("\n").length);
@@ -67,8 +67,8 @@ describe("prettyPrintToString", () => {
   it("should handle very long arrays", () => {
     const veryLongArray = Array.from({ length: 50 }, (_, i) => i + 1);
 
-    const wide = prettyPrintToString(veryLongArray, 300, false);
-    const narrow = prettyPrintToString(veryLongArray, 60, false);
+    const wide = prettyPrintToString(veryLongArray, { width: 300, useColor: false });
+    const narrow = prettyPrintToString(veryLongArray, { width: 60, useColor: false });
 
     // Both should contain all elements
     expect(wide).toContain("49");
@@ -82,7 +82,7 @@ describe("prettyPrintToString", () => {
     const obj: Record<string, unknown> = { a: 1, b: 2 };
     obj.self = obj;
 
-    const result = prettyPrintToString(obj, 80, false);
+    const result = prettyPrintToString(obj, { width: 80, useColor: false });
 
     expect(result).toBe("{a: 1, b: 2, self: [Circular]}");
   });
@@ -91,7 +91,7 @@ describe("prettyPrintToString", () => {
     const arr: unknown[] = [1, 2, 3];
     arr.push(arr);
 
-    const result = prettyPrintToString(arr, 80, false);
+    const result = prettyPrintToString(arr, { width: 80, useColor: false });
 
     expect(result).toBe("[1, 2, 3, [Circular]]");
   });
@@ -101,7 +101,7 @@ describe("prettyPrintToString", () => {
     const child: Record<string, unknown> = { name: "child", parent: parent };
     (parent.children as unknown[]).push(child);
 
-    const result = prettyPrintToString(parent, 80, false);
+    const result = prettyPrintToString(parent, { width: 80, useColor: false });
 
     expect(result).toBe(
       '{name: "parent", children: [{name: "child", parent: [Circular]}]}',
@@ -112,21 +112,21 @@ describe("prettyPrintToString", () => {
     const shared = { value: 42 };
     const obj = { first: shared, second: shared };
 
-    const result = prettyPrintToString(obj, 80, false);
+    const result = prettyPrintToString(obj, { width: 80, useColor: false });
 
     expect(result).toBe("{first: {value: 42}, second: {value: 42}}");
   });
 
   it("should print JSX elements", () => {
     const element = React.createElement("div", { className: "foo" }, "hello");
-    const result = prettyPrintToString(element, 80, false);
+    const result = prettyPrintToString(element, { width: 80, useColor: false });
 
     expect(result).toBe('<div className="foo">hello</div>');
   });
 
   it("should print JSX elements with no children", () => {
     const element = React.createElement("br", {});
-    const result = prettyPrintToString(element, 80, false);
+    const result = prettyPrintToString(element, { width: 80, useColor: false });
 
     expect(result).toBe("<br />");
   });
@@ -136,7 +136,7 @@ describe("prettyPrintToString", () => {
       src: "test.png",
       alt: "test",
     });
-    const result = prettyPrintToString(element, 80, false);
+    const result = prettyPrintToString(element, { width: 80, useColor: false });
 
     expect(result).toBe('<img src="test.png" alt="test" />');
   });
@@ -148,7 +148,7 @@ describe("prettyPrintToString", () => {
       React.createElement("span", {}, "hello"),
       React.createElement("span", {}, "world"),
     );
-    const result = prettyPrintToString(element, 80, false);
+    const result = prettyPrintToString(element, { width: 80, useColor: false });
 
     expect(result).toBe("<div><span>hello</span><span>world</span></div>");
   });
@@ -160,9 +160,50 @@ describe("prettyPrintToString", () => {
       width: 100,
       height: 200,
     });
-    const result = prettyPrintToString(element, 30, false);
+    const result = prettyPrintToString(element, { width: 30, useColor: false });
 
     expect(result).toContain("\n");
+  });
+
+  it("should extract type field as prefix by default", () => {
+    const obj = { type: "person", name: "Alice" };
+    const result = prettyPrintToString(obj, { width: 80, useColor: false });
+    expect(result).toBe('{person name: "Alice"}');
+  });
+
+  it("should keep type as normal property when niceType is false", () => {
+    const obj = { type: "person", name: "Alice" };
+    const result = prettyPrintToString(obj, { width: 80, useColor: false, niceType: false });
+    expect(result).toBe('{type: "person", name: "Alice"}');
+  });
+
+  it("should extract id field as prefix by default", () => {
+    const obj = { id: 42, name: "Alice" };
+    const result = prettyPrintToString(obj, { width: 80, useColor: false });
+    expect(result).toBe('{#42 name: "Alice"}');
+  });
+
+  it("should keep id as normal property when niceId is false", () => {
+    const obj = { id: 42, name: "Alice" };
+    const result = prettyPrintToString(obj, { width: 80, useColor: false, niceId: false });
+    expect(result).toBe('{id: 42, name: "Alice"}');
+  });
+
+  it("should extract both type and id as prefixes by default", () => {
+    const obj = { type: "user", id: 1, name: "Alice" };
+    const result = prettyPrintToString(obj, { width: 80, useColor: false });
+    expect(result).toBe('{user#1 name: "Alice"}');
+  });
+
+  it("should keep both type and id as normal properties when disabled", () => {
+    const obj = { type: "user", id: 1, name: "Alice" };
+    const result = prettyPrintToString(obj, {
+      width: 80,
+      useColor: false,
+      niceType: false,
+      niceId: false,
+    });
+    expect(result).toBe('{type: "user", id: 1, name: "Alice"}');
   });
 
   it("should keep opening tag together when it fits", () => {
@@ -171,7 +212,7 @@ describe("prettyPrintToString", () => {
       { "data-path": "/" },
       React.createElement("circle", { cx: 0, cy: 0 }),
     );
-    const result = prettyPrintToString(element, 20, false);
+    const result = prettyPrintToString(element, { width: 20, useColor: false });
 
     // The opening tag should stay together if it fits
     expect(result).toBe(
