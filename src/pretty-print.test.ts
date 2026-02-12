@@ -206,6 +206,71 @@ describe("prettyPrintToString", () => {
     expect(result).toBe('{type: "user", id: 1, name: "Alice"}');
   });
 
+  it("should format numbers with precision (toFixed)", () => {
+    const result = prettyPrintToString(3.14159, { useColor: false, precision: 2 });
+    expect(result).toBe("3.14");
+  });
+
+  it("should format numbers with precision 0", () => {
+    const result = prettyPrintToString(3.7, { useColor: false, precision: 0 });
+    expect(result).toBe("4");
+  });
+
+  it("should pad with zeros when precision exceeds decimal places", () => {
+    const result = prettyPrintToString(1.5, { useColor: false, precision: 4 });
+    expect(result).toBe("1.5000");
+  });
+
+  it("should format numbers with significantDigits (toPrecision)", () => {
+    const result = prettyPrintToString(3.14159, { useColor: false, significantDigits: 4 });
+    expect(result).toBe("3.142");
+  });
+
+  it("should format large numbers with significantDigits", () => {
+    const result = prettyPrintToString(123456, { useColor: false, significantDigits: 3 });
+    expect(result).toBe("1.23e+5");
+  });
+
+  it("precision should take precedence over significantDigits", () => {
+    const result = prettyPrintToString(3.14159, {
+      useColor: false,
+      precision: 1,
+      significantDigits: 5,
+    });
+    expect(result).toBe("3.1");
+  });
+
+  it("should not apply precision to Infinity", () => {
+    const result = prettyPrintToString(Infinity, { useColor: false, precision: 2 });
+    expect(result).toBe("Infinity");
+  });
+
+  it("should not apply precision to NaN", () => {
+    const result = prettyPrintToString(NaN, { useColor: false, precision: 2 });
+    expect(result).toBe("NaN");
+  });
+
+  it("should not apply significantDigits to -Infinity", () => {
+    const result = prettyPrintToString(-Infinity, { useColor: false, significantDigits: 3 });
+    expect(result).toBe("-Infinity");
+  });
+
+  it("should apply precision to numbers inside objects and arrays", () => {
+    const data = { values: [1.111, 2.222, 3.333] };
+    const result = prettyPrintToString(data, { width: 80, useColor: false, precision: 1 });
+    expect(result).toBe("{values: [1.1, 2.2, 3.3]}");
+  });
+
+  it("should format integers with precision", () => {
+    const result = prettyPrintToString(42, { useColor: false, precision: 2 });
+    expect(result).toBe("42.00");
+  });
+
+  it("should leave numbers unchanged when neither option is set", () => {
+    const result = prettyPrintToString(3.14159, { useColor: false });
+    expect(result).toBe("3.14159");
+  });
+
   it("should keep opening tag together when it fits", () => {
     const element = React.createElement(
       "g",

@@ -11,6 +11,10 @@ export interface PrettyPrintOptions {
   useColor?: boolean;
   niceId?: boolean;
   niceType?: boolean;
+  /** Number of digits after the decimal point for floating-point numbers (uses toFixed). */
+  precision?: number;
+  /** Number of significant digits for floating-point numbers (uses toPrecision). Ignored if precision is set. */
+  significantDigits?: number;
 }
 
 // Single source of truth for all color information
@@ -311,7 +315,15 @@ function prettyPrintToDoc(
   }
 
   if (typeof value === "number") {
-    return colorize(String(value), "number", path);
+    let numStr: string;
+    if (Number.isFinite(value) && options.precision != null) {
+      numStr = value.toFixed(options.precision);
+    } else if (Number.isFinite(value) && options.significantDigits != null) {
+      numStr = value.toPrecision(options.significantDigits);
+    } else {
+      numStr = String(value);
+    }
+    return colorize(numStr, "number", path);
   }
 
   if (typeof value === "boolean") {
