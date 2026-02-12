@@ -6,8 +6,14 @@ describe("prettyPrintToString", () => {
   it("should format with and without ANSI codes", () => {
     const longArray = Array.from({ length: 20 }, (_, i) => i);
 
-    const withoutAnsi = prettyPrintToString(longArray, { width: 200, useColor: false });
-    const withAnsi = prettyPrintToString(longArray, { width: 200, useColor: true });
+    const withoutAnsi = prettyPrintToString(longArray, {
+      width: 200,
+      useColor: false,
+    });
+    const withAnsi = prettyPrintToString(longArray, {
+      width: 200,
+      useColor: true,
+    });
 
     // Count ANSI escape sequences
     const ansiMatches = withAnsi.match(/\x1b\[\d+m/g);
@@ -17,7 +23,10 @@ describe("prettyPrintToString", () => {
 
   it("should format long arrays inline with wide printWidth", () => {
     const longArray = Array.from({ length: 20 }, (_, i) => i);
-    const result = prettyPrintToString(longArray, { width: 200, useColor: false });
+    const result = prettyPrintToString(longArray, {
+      width: 200,
+      useColor: false,
+    });
 
     // With width 200, this should be all on one line
     expect(result).not.toContain("\n");
@@ -25,7 +34,10 @@ describe("prettyPrintToString", () => {
 
   it("should format long arrays with line breaks when narrow", () => {
     const longArray = Array.from({ length: 20 }, (_, i) => i);
-    const result = prettyPrintToString(longArray, { width: 40, useColor: false });
+    const result = prettyPrintToString(longArray, {
+      width: 40,
+      useColor: false,
+    });
 
     // With width 40, this should break across multiple lines
     expect(result).toContain("\n");
@@ -67,8 +79,14 @@ describe("prettyPrintToString", () => {
   it("should handle very long arrays", () => {
     const veryLongArray = Array.from({ length: 50 }, (_, i) => i + 1);
 
-    const wide = prettyPrintToString(veryLongArray, { width: 300, useColor: false });
-    const narrow = prettyPrintToString(veryLongArray, { width: 60, useColor: false });
+    const wide = prettyPrintToString(veryLongArray, {
+      width: 300,
+      useColor: false,
+    });
+    const narrow = prettyPrintToString(veryLongArray, {
+      width: 60,
+      useColor: false,
+    });
 
     // Both should contain all elements
     expect(wide).toContain("49");
@@ -173,7 +191,11 @@ describe("prettyPrintToString", () => {
 
   it("should keep type as normal property when niceType is false", () => {
     const obj = { type: "person", name: "Alice" };
-    const result = prettyPrintToString(obj, { width: 80, useColor: false, niceType: false });
+    const result = prettyPrintToString(obj, {
+      width: 80,
+      useColor: false,
+      niceType: false,
+    });
     expect(result).toBe('{type: "person", name: "Alice"}');
   });
 
@@ -185,7 +207,11 @@ describe("prettyPrintToString", () => {
 
   it("should keep id as normal property when niceId is false", () => {
     const obj = { id: 42, name: "Alice" };
-    const result = prettyPrintToString(obj, { width: 80, useColor: false, niceId: false });
+    const result = prettyPrintToString(obj, {
+      width: 80,
+      useColor: false,
+      niceId: false,
+    });
     expect(result).toBe('{id: 42, name: "Alice"}');
   });
 
@@ -206,8 +232,11 @@ describe("prettyPrintToString", () => {
     expect(result).toBe('{type: "user", id: 1, name: "Alice"}');
   });
 
-  it("should format numbers with precision (toFixed)", () => {
-    const result = prettyPrintToString(3.14159, { useColor: false, precision: 2 });
+  it("should limit decimal places with precision", () => {
+    const result = prettyPrintToString(3.14159, {
+      useColor: false,
+      precision: 2,
+    });
     expect(result).toBe("3.14");
   });
 
@@ -216,18 +245,24 @@ describe("prettyPrintToString", () => {
     expect(result).toBe("4");
   });
 
-  it("should pad with zeros when precision exceeds decimal places", () => {
+  it("should not pad with zeros when precision exceeds decimal places", () => {
     const result = prettyPrintToString(1.5, { useColor: false, precision: 4 });
-    expect(result).toBe("1.5000");
+    expect(result).toBe("1.5");
   });
 
   it("should format numbers with significantDigits (toPrecision)", () => {
-    const result = prettyPrintToString(3.14159, { useColor: false, significantDigits: 4 });
+    const result = prettyPrintToString(3.14159, {
+      useColor: false,
+      significantDigits: 4,
+    });
     expect(result).toBe("3.142");
   });
 
   it("should format large numbers with significantDigits", () => {
-    const result = prettyPrintToString(123456, { useColor: false, significantDigits: 3 });
+    const result = prettyPrintToString(123456, {
+      useColor: false,
+      significantDigits: 3,
+    });
     expect(result).toBe("1.23e+5");
   });
 
@@ -241,7 +276,10 @@ describe("prettyPrintToString", () => {
   });
 
   it("should not apply precision to Infinity", () => {
-    const result = prettyPrintToString(Infinity, { useColor: false, precision: 2 });
+    const result = prettyPrintToString(Infinity, {
+      useColor: false,
+      precision: 2,
+    });
     expect(result).toBe("Infinity");
   });
 
@@ -251,19 +289,26 @@ describe("prettyPrintToString", () => {
   });
 
   it("should not apply significantDigits to -Infinity", () => {
-    const result = prettyPrintToString(-Infinity, { useColor: false, significantDigits: 3 });
+    const result = prettyPrintToString(-Infinity, {
+      useColor: false,
+      significantDigits: 3,
+    });
     expect(result).toBe("-Infinity");
   });
 
   it("should apply precision to numbers inside objects and arrays", () => {
     const data = { values: [1.111, 2.222, 3.333] };
-    const result = prettyPrintToString(data, { width: 80, useColor: false, precision: 1 });
+    const result = prettyPrintToString(data, {
+      width: 80,
+      useColor: false,
+      precision: 1,
+    });
     expect(result).toBe("{values: [1.1, 2.2, 3.3]}");
   });
 
-  it("should format integers with precision", () => {
+  it("should not pad integers with precision", () => {
     const result = prettyPrintToString(42, { useColor: false, precision: 2 });
-    expect(result).toBe("42.00");
+    expect(result).toBe("42");
   });
 
   it("should leave numbers unchanged when neither option is set", () => {

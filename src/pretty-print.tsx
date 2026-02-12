@@ -11,7 +11,7 @@ export interface PrettyPrintOptions {
   useColor?: boolean;
   niceId?: boolean;
   niceType?: boolean;
-  /** Number of digits after the decimal point for floating-point numbers (uses toFixed). */
+  /** Maximum number of digits after the decimal point for floating-point numbers. */
   precision?: number;
   /** Number of significant digits for floating-point numbers (uses toPrecision). Ignored if precision is set. */
   significantDigits?: number;
@@ -317,7 +317,7 @@ function prettyPrintToDoc(
   if (typeof value === "number") {
     let numStr: string;
     if (Number.isFinite(value) && options.precision != null) {
-      numStr = value.toFixed(options.precision);
+      numStr = String(parseFloat(value.toFixed(options.precision)));
     } else if (Number.isFinite(value) && options.significantDigits != null) {
       numStr = value.toPrecision(options.significantDigits);
     } else {
