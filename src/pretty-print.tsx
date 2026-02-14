@@ -235,8 +235,6 @@ function prettyPrintToDoc(
       const { children, ...otherProps } = props;
 
       const openTag = colorize(`<${type}`, "keyword", [...path, 0]);
-      const closeTag = colorize(`</${type}>`, "keyword", [...path, 4]);
-      const selfCloseTag = colorize("/>", "keyword", [...path, 2]);
 
       // Format props
       const propEntries = Object.entries(otherProps);
@@ -264,10 +262,12 @@ function prettyPrintToDoc(
       const hasChildren = childrenArray.length > 0;
 
       if (!hasChildren && propEntries.length === 0) {
+        const selfCloseTag = colorize("/>", "keyword", [...path, 2]);
         return [openTag, " ", selfCloseTag];
       }
 
       if (!hasChildren) {
+        const selfCloseTag = colorize("/>", "keyword", [...path, 2]);
         return group([
           openTag,
           indent(propDocs),
@@ -275,6 +275,8 @@ function prettyPrintToDoc(
           selfCloseTag,
         ]);
       }
+
+      const closeTag = colorize(`</${type}>`, "keyword", [...path, 4]);
 
       const childDocs = childrenArray.map((child, i) =>
         typeof child === "string" || typeof child === "number"
@@ -521,6 +523,8 @@ export function prettyPrintToString(
   value: unknown,
   options: PrettyPrintOptions = {},
 ): string {
+  console.log("value", value);
+
   const { width = 80, useColor = true } = options;
   const tagger = useColor ? new StringTagger() : null;
   const doc = prettyPrintToDoc(value, tagger, options);

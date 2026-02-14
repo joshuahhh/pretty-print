@@ -334,4 +334,20 @@ describe("prettyPrintToString", () => {
 </g>`,
     );
   });
+
+  it("should print nested JSX elements with color enabled", () => {
+    // Nested JSX with children triggers the bug: phantom selfCloseTag/closeTag
+    // spans get registered in tagger.tag() but never appear in the formatted
+    // output, corrupting path-based marker matching in expand().
+    const element = React.createElement(
+      "g",
+      { transform: "translate(0,0)" },
+      React.createElement("rect", { width: 10, height: 20 }),
+      React.createElement("text", { x: 5 }, "hello"),
+    );
+
+    expect(() =>
+      prettyPrintToString(element, { width: 60, useColor: true }),
+    ).not.toThrow();
+  });
 });
