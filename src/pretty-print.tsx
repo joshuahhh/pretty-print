@@ -523,8 +523,6 @@ export function prettyPrintToString(
   value: unknown,
   options: PrettyPrintOptions = {},
 ): string {
-  console.log("value", value);
-
   const { width = 80, useColor = true } = options;
   const tagger = useColor ? new StringTagger() : null;
   const doc = prettyPrintToDoc(value, tagger, options);
